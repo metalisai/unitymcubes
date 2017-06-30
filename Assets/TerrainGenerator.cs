@@ -30,7 +30,8 @@ public class TerrainGenerator : MonoBehaviour
             {
                 for (int k = 0; k < size; k++)
                 {
-                    _mcubes.MarchCube(origin.x + i * voxelSize, origin.y + j * voxelSize, origin.z + k * voxelSize, voxelSize);
+                    Vector3 offset = new Vector3(i*voxelSize, j*voxelSize, k*voxelSize);
+                    _mcubes.MarchCube(origin + offset, voxelSize);
                 }
             }
         }

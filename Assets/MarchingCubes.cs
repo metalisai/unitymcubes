@@ -17,6 +17,9 @@ public class MarchingCubes
     List<Vector3> _vertices = new List<Vector3>();
     List<int> _indices = new List<int>();
     int _currentIndex = 0;
+    // outside the function for better performance
+    float[] afCubeValue = new float[8];
+
 
     public void Reset()
     {
@@ -35,36 +38,30 @@ public class MarchingCubes
         return _indices.ToArray();
     }
 
-    float fSample(float fX, float fY, float fZ)
+    float fSample(Vector3 position)
     {
         float pi = Mathf.PI;
         float sampleSize = 0.1f;
 
-		// NOTE: doesn't work with proper fGetOffset
+		// NOTE: doesn't work with edge interpolation
 		// I add pi because perlin noise is messed up at whole numbers
-        float heightSample = Mathf.PerlinNoise((fX+pi) * sampleSize, (fZ + pi) * sampleSize)*2.0f; // range from 0...8
-        if (heightSample+fY > 6.0f)
+        float heightSample = Mathf.PerlinNoise((position.x+pi) * sampleSize, (position.z + pi) * sampleSize)*2.0f;
+        if (heightSample+position.y > 6.0f)
             return -1.0f;
-        if (heightSample+fY < 3.0f)
+        if (heightSample+position.y < 3.0f)
             return 1.0f;
-        return PerlinNoise.PerlinNoise3((fX+pi)*sampleSize, (fY+pi)*sampleSize, (fZ+pi)*sampleSize);
+        return PerlinNoise.PerlinNoise3((position.x+pi)*sampleSize, (position.y+pi)*sampleSize, (position.z+pi)*sampleSize);
     }
 
-    public void MarchCube(float fX, float fY, float fZ, float fScale)
+    public void MarchCube(Vector3 minCorner, float fScale)
     {
-        int iCorner, iVertex, iVertexTest, iEdge, iTriangle, iFlagIndex, iEdgeFlags;
-        float fOffset;
-        Vector3 sColor;
-        float[] afCubeValue = new float[8];
-        Vector3[] asEdgeVertex = new Vector3[12];
-        Vector3[] asEdgeNorm = new Vector3[12];
+        int iCorner, iVertex, iVertexTest, iTriangle, iFlagIndex;
 
         //Make a local copy of the values at the cube's corners
         for (iVertex = 0; iVertex < 8; iVertex++)
         {
-            afCubeValue[iVertex] = fSample(fX + a2fVertexOffset[iVertex, 0] * fScale,
-                                fY + a2fVertexOffset[iVertex, 1] * fScale,
-                                fZ + a2fVertexOffset[iVertex, 2] * fScale);
+            Vector3 cornerPosition = minCorner + cornerOffsets[iVertex]*fScale;
+            afCubeValue[iVertex] = fSample(cornerPosition);
         }
 
         //Find which vertices are inside of the surface and which are outside
@@ -75,94 +72,71 @@ public class MarchingCubes
                 iFlagIndex |= 1 << iVertexTest;
         }
 
-        //Find which edges are intersected by the surface
-        iEdgeFlags = aiCubeEdgeFlags[iFlagIndex];
-
-        //If the cube is entirely inside or outside of the surface, then there will be no intersections
-        if (iEdgeFlags == 0)
-        {
+        // entirely inside/outside the volume
+        if(iFlagIndex == 0x00 || iFlagIndex == 0xFF)
             return;
-        }
-
-        //Find the point of intersection of the surface with each edge
-        //Then find the normal to the surface at those points
-        for (iEdge = 0; iEdge < 12; iEdge++)
-        {
-            //if there is an intersection on this edge
-            if ((iEdgeFlags & (1 << iEdge)) != 0)
-            {
-                /*fOffset = fGetOffset(afCubeValue[a2iEdgeConnection[iEdge][0]],
-                afCubeValue[a2iEdgeConnection[iEdge][1]], fTargetValue);*/
-				// for smoother mesh, replace this
-                fOffset = 0.5f;
-
-                asEdgeVertex[iEdge].x = fX + (a2fVertexOffset[a2iEdgeConnection[iEdge, 0], 0] + fOffset * a2fEdgeDirection[iEdge, 0]) * fScale;
-                asEdgeVertex[iEdge].y = fY + (a2fVertexOffset[a2iEdgeConnection[iEdge, 0], 1] + fOffset * a2fEdgeDirection[iEdge, 1]) * fScale;
-                asEdgeVertex[iEdge].z = fZ + (a2fVertexOffset[a2iEdgeConnection[iEdge, 0], 2] + fOffset * a2fEdgeDirection[iEdge, 2]) * fScale;
-
-                //vGetNormal(asEdgeNorm[iEdge], asEdgeVertex[iEdge].fX, asEdgeVertex[iEdge].fY, asEdgeVertex[iEdge].fZ);
-            }
-        }
-
 
         //Draw the triangles that were found.  There can be up to five per cube
         for (iTriangle = 0; iTriangle < 5; iTriangle++)
         {
-            if (a2iTriangleConnectionTable[iFlagIndex, 3 * iTriangle] < 0)
+            int edgeIndex = a2iTriangleConnectionTable[iFlagIndex, 3 * iTriangle];
+            if(edgeIndex < 0)
                 break;
 
             for (iCorner = 0; iCorner < 3; iCorner++)
             {
                 iVertex = a2iTriangleConnectionTable[iFlagIndex, 3 * iTriangle + iCorner];
 
-                //vGetColor(sColor, asEdgeVertex[iVertex], asEdgeNorm[iVertex]);
-                //glColor3f(sColor.fX, sColor.fY, sColor.fZ);
-                //glNormal3f(asEdgeNorm[iVertex].fX, asEdgeNorm[iVertex].fY, asEdgeNorm[iVertex].fZ);
-                _vertices.Add(new Vector3(asEdgeVertex[iVertex].x, asEdgeVertex[iVertex].y, asEdgeVertex[iVertex].z));
+                Vector3 edge1 = minCorner + edgeVertexOffsets[iVertex, 0] * fScale;
+                Vector3 edge2 = minCorner + edgeVertexOffsets[iVertex, 1] * fScale;
+                Vector3 middlePoint = (edge1+edge2)*0.5f;
+
+                // smoothed version would be: (requires continuous sample values, which fSample in this example doesn't provide)
+                /*
+                float offset;
+                float s1 = fSample(edge1);
+                float delta = s1 - fSample(edge2);
+                if(delta == 0.0f)
+                    offset = 0.5f;
+                else
+                    offset = s1 / delta;
+                Vector3 middlePoint = edge1 + offset*(edge2-edge1); // lerp
+                */
+
+                _vertices.Add(middlePoint);
                 _indices.Add(_currentIndex++);
             }
         }
     }
 
-    float[,] a2fVertexOffset = new float[,]
+    // offsets from the minimal corner to other corners
+    static readonly Vector3[] cornerOffsets = new Vector3[8]
     {
-        {0.0f, 0.0f, 0.0f},{1.0f, 0.0f, 0.0f},{1.0f, 1.0f, 0.0f},{0.0f, 1.0f, 0.0f},
-        {0.0f, 0.0f, 1.0f},{1.0f, 0.0f, 1.0f},{1.0f, 1.0f, 1.0f},{0.0f, 1.0f, 1.0f}
+        new Vector3(0.0f, 0.0f, 0.0f),
+        new Vector3(1.0f, 0.0f, 0.0f),
+        new Vector3(1.0f, 1.0f, 0.0f),
+        new Vector3(0.0f, 1.0f, 0.0f),
+        new Vector3(0.0f, 0.0f, 1.0f),
+        new Vector3(1.0f, 0.0f, 1.0f),
+        new Vector3(1.0f, 1.0f, 1.0f),
+        new Vector3(0.0f, 1.0f, 1.0f)
     };
 
-    int[] aiCubeEdgeFlags = new int[]
+    // offsets from the minimal corner to 2 ends of the edges
+    static readonly Vector3[,] edgeVertexOffsets = new Vector3[12, 2]
     {
-        0x000, 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c, 0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
-        0x190, 0x099, 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c, 0x99c, 0x895, 0xb9f, 0xa96, 0xd9a, 0xc93, 0xf99, 0xe90,
-        0x230, 0x339, 0x033, 0x13a, 0x636, 0x73f, 0x435, 0x53c, 0xa3c, 0xb35, 0x83f, 0x936, 0xe3a, 0xf33, 0xc39, 0xd30,
-        0x3a0, 0x2a9, 0x1a3, 0x0aa, 0x7a6, 0x6af, 0x5a5, 0x4ac, 0xbac, 0xaa5, 0x9af, 0x8a6, 0xfaa, 0xea3, 0xda9, 0xca0,
-        0x460, 0x569, 0x663, 0x76a, 0x066, 0x16f, 0x265, 0x36c, 0xc6c, 0xd65, 0xe6f, 0xf66, 0x86a, 0x963, 0xa69, 0xb60,
-        0x5f0, 0x4f9, 0x7f3, 0x6fa, 0x1f6, 0x0ff, 0x3f5, 0x2fc, 0xdfc, 0xcf5, 0xfff, 0xef6, 0x9fa, 0x8f3, 0xbf9, 0xaf0,
-        0x650, 0x759, 0x453, 0x55a, 0x256, 0x35f, 0x055, 0x15c, 0xe5c, 0xf55, 0xc5f, 0xd56, 0xa5a, 0xb53, 0x859, 0x950,
-        0x7c0, 0x6c9, 0x5c3, 0x4ca, 0x3c6, 0x2cf, 0x1c5, 0x0cc, 0xfcc, 0xec5, 0xdcf, 0xcc6, 0xbca, 0xac3, 0x9c9, 0x8c0,
-        0x8c0, 0x9c9, 0xac3, 0xbca, 0xcc6, 0xdcf, 0xec5, 0xfcc, 0x0cc, 0x1c5, 0x2cf, 0x3c6, 0x4ca, 0x5c3, 0x6c9, 0x7c0,
-        0x950, 0x859, 0xb53, 0xa5a, 0xd56, 0xc5f, 0xf55, 0xe5c, 0x15c, 0x055, 0x35f, 0x256, 0x55a, 0x453, 0x759, 0x650,
-        0xaf0, 0xbf9, 0x8f3, 0x9fa, 0xef6, 0xfff, 0xcf5, 0xdfc, 0x2fc, 0x3f5, 0x0ff, 0x1f6, 0x6fa, 0x7f3, 0x4f9, 0x5f0,
-        0xb60, 0xa69, 0x963, 0x86a, 0xf66, 0xe6f, 0xd65, 0xc6c, 0x36c, 0x265, 0x16f, 0x066, 0x76a, 0x663, 0x569, 0x460,
-        0xca0, 0xda9, 0xea3, 0xfaa, 0x8a6, 0x9af, 0xaa5, 0xbac, 0x4ac, 0x5a5, 0x6af, 0x7a6, 0x0aa, 0x1a3, 0x2a9, 0x3a0,
-        0xd30, 0xc39, 0xf33, 0xe3a, 0x936, 0x83f, 0xb35, 0xa3c, 0x53c, 0x435, 0x73f, 0x636, 0x13a, 0x033, 0x339, 0x230,
-        0xe90, 0xf99, 0xc93, 0xd9a, 0xa96, 0xb9f, 0x895, 0x99c, 0x69c, 0x795, 0x49f, 0x596, 0x29a, 0x393, 0x099, 0x190,
-        0xf00, 0xe09, 0xd03, 0xc0a, 0xb06, 0xa0f, 0x905, 0x80c, 0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x000
-    };
-
-    //a2iEdgeConnection lists the index of the endpoint vertices for each of the 12 edges of the cube
-    int[,] a2iEdgeConnection = new int[,]
-    {
-        {0,1}, {1,2}, {2,3}, {3,0},
-        {4,5}, {5,6}, {6,7}, {7,4},
-        {0,4}, {1,5}, {2,6}, {3,7}
-    };
-
-    float[,] a2fEdgeDirection = new float[,]
-    {
-        {1.0f, 0.0f, 0.0f},{0.0f, 1.0f, 0.0f},{-1.0f, 0.0f, 0.0f},{0.0f, -1.0f, 0.0f},
-        {1.0f, 0.0f, 0.0f},{0.0f, 1.0f, 0.0f},{-1.0f, 0.0f, 0.0f},{0.0f, -1.0f, 0.0f},
-        {0.0f, 0.0f, 1.0f},{0.0f, 0.0f, 1.0f},{ 0.0f, 0.0f, 1.0f},{0.0f,  0.0f, 1.0f}
+        { new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 0.0f, 0.0f) },
+        { new Vector3(1.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 0.0f) },
+        { new Vector3(0.0f, 1.0f, 0.0f), new Vector3(1.0f, 1.0f, 0.0f) },
+        { new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 1.0f, 0.0f) },
+        { new Vector3(0.0f, 0.0f, 1.0f), new Vector3(1.0f, 0.0f, 1.0f) },
+        { new Vector3(1.0f, 0.0f, 1.0f), new Vector3(1.0f, 1.0f, 1.0f) },
+        { new Vector3(0.0f, 1.0f, 1.0f), new Vector3(1.0f, 1.0f, 1.0f) },
+        { new Vector3(0.0f, 0.0f, 1.0f), new Vector3(0.0f, 1.0f, 1.0f) },
+        { new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 1.0f) },
+        { new Vector3(1.0f, 0.0f, 0.0f), new Vector3(1.0f, 0.0f, 1.0f) },
+        { new Vector3(1.0f, 1.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f) },
+        { new Vector3(0.0f, 1.0f, 0.0f), new Vector3(0.0f, 1.0f, 1.0f) }
     };
 
     int[,] a2iTriangleConnectionTable = new int[,]
