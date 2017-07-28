@@ -8,7 +8,6 @@ using UnityEngine;
 // NOTE: no uvs, no normals, no smoothing
 // triplanar mapping for uvs?
 // analytical normals would probably be optimal (Mesh.RecalculateNormals() is slow and inaccurate)
-// for smoother mesh see the original source code
 
 public class MarchingCubes
 {
@@ -19,7 +18,6 @@ public class MarchingCubes
     int _currentIndex = 0;
     // outside the function for better performance
     float[] afCubeValue = new float[8];
-
 
     public void Reset()
     {
@@ -43,15 +41,93 @@ public class MarchingCubes
         float pi = Mathf.PI;
         float sampleSize = 0.1f;
 
-		// NOTE: doesn't work with edge interpolation
-		// I add pi because perlin noise is messed up at whole numbers
-        float heightSample = Mathf.PerlinNoise((position.x+pi) * sampleSize, (position.z + pi) * sampleSize)*2.0f;
-        if (heightSample+position.y > 6.0f)
-            return -1.0f;
-        if (heightSample+position.y < 3.0f)
-            return 1.0f;
-        return PerlinNoise.PerlinNoise3((position.x+pi)*sampleSize, (position.y+pi)*sampleSize, (position.z+pi)*sampleSize);
+        float height01 = Mathf.PerlinNoise((position.x+pi)*sampleSize, (position.z+pi)*sampleSize);
+        float height = height01 * 8.0f;
+        float heightSample = height - position.y;
+
+        float volumetricSample = PerlinNoise.PerlinNoise3((position.x+pi)*sampleSize, (position.y+pi)*sampleSize, (position.z+pi)*sampleSize);
+        return Mathf.Min(heightSample, -volumetricSample) + Mathf.Clamp01(height01 - position.y + 0.5f);
     }
+
+    public void MarchChunk(Vector3 minCorner, int size, float scale)
+    {
+        int flagIndex;
+
+        // First precalculate all samples
+
+        // TODO: reuse this buffer
+        float[,,] sampleBuffer = new float[size + 1, size + 1, size + 1];
+        int sizep1 = size + 1;
+        for(int i = 0; i < sizep1; i++)
+        for(int j = 0; j < sizep1; j++)
+        for(int k = 0; k < sizep1; k++)
+        {
+            Vector3 offset = new Vector3(i * scale, j * scale, k * scale);
+            sampleBuffer[i, j, k] = fSample(minCorner + offset);
+        }
+
+        // Now march!
+        for(int i = 0; i < size; i++)
+        for(int j = 0; j < size; j++)
+        for(int k = 0; k < size; k++)
+        {
+            // offsets are same as cornerOffsets[8]
+            afCubeValue[0] = sampleBuffer[i, j, k];
+            afCubeValue[1] = sampleBuffer[i+1, j, k];
+            afCubeValue[2] = sampleBuffer[i+1, j+1, k];
+            afCubeValue[3] = sampleBuffer[i, j+1, k];
+            afCubeValue[4] = sampleBuffer[i, j, k+1];
+            afCubeValue[5] = sampleBuffer[i+1, j, k+1];
+            afCubeValue[6] = sampleBuffer[i+1, j+1, k+1];
+            afCubeValue[7] = sampleBuffer[i, j+1, k+1];
+
+            // corner bitfield
+            flagIndex = 0;
+            for(int vtest = 0; vtest < 8; vtest++)
+            {
+                if(afCubeValue[vtest] <= 0.0f)
+                    flagIndex |= 1 << vtest;
+            }
+
+            // early out if all corners same
+            if(flagIndex == 0x00 || flagIndex == 0xFF)
+                continue;
+
+            // voxel world offset
+            Vector3 offset = minCorner + new Vector3(i * scale, j * scale, k * scale);
+            // generate triangles
+            for(int tri = 0; tri < 5; tri++)
+            {
+                int edgeIndex = a2iTriangleConnectionTable[flagIndex, 3 * tri];
+                if(edgeIndex < 0)
+                    break;
+
+                for(int triCorner = 0; triCorner < 3; triCorner++)
+                {
+                    edgeIndex = a2iTriangleConnectionTable[flagIndex, 3 * tri + triCorner];
+
+                    IVec3 edge1I = edgeVertexOffsets[edgeIndex, 0];
+                    IVec3 edge2I = edgeVertexOffsets[edgeIndex, 1];
+                    Vector3 edge1 = edge1I * scale;
+                    Vector3 edge2 = edge2I * scale;
+                    Vector3 middlePoint = (edge1+edge2)*0.5f;
+
+                    /*float ofst;
+                    float s1 = sampleBuffer[i + edge1I.x, j + edge1I.y, k + edge1I.z];
+                    float delta = s1 - sampleBuffer[i + edge2I.x, j + edge2I.y, k + edge2I.z];
+                    if(delta == 0.0f)
+                        ofst = 0.5f;
+                    else
+                        ofst = s1 / delta;
+                    middlePoint = edge1 + ofst*(edge2-edge1); // lerp*/
+
+                    _vertices.Add(offset + middlePoint);
+                    _indices.Add(_currentIndex++);
+                }
+            }
+        }
+    }
+
 
     public void MarchCube(Vector3 minCorner, float fScale)
     {
@@ -92,16 +168,14 @@ public class MarchingCubes
                 Vector3 middlePoint = (edge1+edge2)*0.5f;
 
                 // smoothed version would be: (requires continuous sample values, which fSample in this example doesn't provide)
-                /*
-                float offset;
+                /*float offset;
                 float s1 = fSample(edge1);
                 float delta = s1 - fSample(edge2);
                 if(delta == 0.0f)
                     offset = 0.5f;
                 else
                     offset = s1 / delta;
-                Vector3 middlePoint = edge1 + offset*(edge2-edge1); // lerp
-                */
+                Vector3 middlePoint = edge1 + offset*(edge2-edge1); // lerp*/
 
                 _vertices.Add(middlePoint);
                 _indices.Add(_currentIndex++);
@@ -110,33 +184,33 @@ public class MarchingCubes
     }
 
     // offsets from the minimal corner to other corners
-    static readonly Vector3[] cornerOffsets = new Vector3[8]
+    static readonly IVec3[] cornerOffsets = new IVec3[8]
     {
-        new Vector3(0.0f, 0.0f, 0.0f),
-        new Vector3(1.0f, 0.0f, 0.0f),
-        new Vector3(1.0f, 1.0f, 0.0f),
-        new Vector3(0.0f, 1.0f, 0.0f),
-        new Vector3(0.0f, 0.0f, 1.0f),
-        new Vector3(1.0f, 0.0f, 1.0f),
-        new Vector3(1.0f, 1.0f, 1.0f),
-        new Vector3(0.0f, 1.0f, 1.0f)
+        new IVec3(0, 0, 0),
+        new IVec3(1, 0, 0),
+        new IVec3(1, 1, 0),
+        new IVec3(0, 1, 0),
+        new IVec3(0, 0, 1),
+        new IVec3(1, 0, 1),
+        new IVec3(1, 1, 1),
+        new IVec3(0, 1, 1)
     };
 
     // offsets from the minimal corner to 2 ends of the edges
-    static readonly Vector3[,] edgeVertexOffsets = new Vector3[12, 2]
+    static readonly IVec3[,] edgeVertexOffsets = new IVec3[12, 2]
     {
-        { new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 0.0f, 0.0f) },
-        { new Vector3(1.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 0.0f) },
-        { new Vector3(0.0f, 1.0f, 0.0f), new Vector3(1.0f, 1.0f, 0.0f) },
-        { new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 1.0f, 0.0f) },
-        { new Vector3(0.0f, 0.0f, 1.0f), new Vector3(1.0f, 0.0f, 1.0f) },
-        { new Vector3(1.0f, 0.0f, 1.0f), new Vector3(1.0f, 1.0f, 1.0f) },
-        { new Vector3(0.0f, 1.0f, 1.0f), new Vector3(1.0f, 1.0f, 1.0f) },
-        { new Vector3(0.0f, 0.0f, 1.0f), new Vector3(0.0f, 1.0f, 1.0f) },
-        { new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 1.0f) },
-        { new Vector3(1.0f, 0.0f, 0.0f), new Vector3(1.0f, 0.0f, 1.0f) },
-        { new Vector3(1.0f, 1.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f) },
-        { new Vector3(0.0f, 1.0f, 0.0f), new Vector3(0.0f, 1.0f, 1.0f) }
+        { new IVec3(0, 0, 0), new IVec3(1, 0, 0) },
+        { new IVec3(1, 0, 0), new IVec3(1, 1, 0) },
+        { new IVec3(0, 1, 0), new IVec3(1, 1, 0) },
+        { new IVec3(0, 0, 0), new IVec3(0, 1, 0) },
+        { new IVec3(0, 0, 1), new IVec3(1, 0, 1) },
+        { new IVec3(1, 0, 1), new IVec3(1, 1, 1) },
+        { new IVec3(0, 1, 1), new IVec3(1, 1, 1) },
+        { new IVec3(0, 0, 1), new IVec3(0, 1, 1) },
+        { new IVec3(0, 0, 0), new IVec3(0, 0, 1) },
+        { new IVec3(1, 0, 0), new IVec3(1, 0, 1) },
+        { new IVec3(1, 1, 0), new IVec3(1, 1, 1) },
+        { new IVec3(0, 1, 0), new IVec3(0, 1, 1) }
     };
 
     int[,] a2iTriangleConnectionTable = new int[,]
