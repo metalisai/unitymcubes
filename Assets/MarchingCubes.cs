@@ -11,8 +11,6 @@ using UnityEngine;
 
 public class MarchingCubes
 {
-
-    float fTargetValue = 0.0f;
     List<Vector3> _vertices = new List<Vector3>();
     List<int> _indices = new List<int>();
     int _currentIndex = 0;
@@ -119,7 +117,7 @@ public class MarchingCubes
                         ofst = 0.5f;
                     else
                         ofst = s1 / delta;
-                    middlePoint = edge1 + ofst*(edge2-edge1); // lerp*/
+                    Vector3 middlePoint = edge1 + ofst*(edge2-edge1); // lerp*/
 
                     _vertices.Add(offset + middlePoint);
                     _indices.Add(_currentIndex++);
@@ -144,7 +142,7 @@ public class MarchingCubes
         iFlagIndex = 0;
         for (iVertexTest = 0; iVertexTest < 8; iVertexTest++)
         {
-            if (afCubeValue[iVertexTest] <= fTargetValue)
+            if (afCubeValue[iVertexTest] <= 0.0f)
                 iFlagIndex |= 1 << iVertexTest;
         }
 
@@ -167,7 +165,7 @@ public class MarchingCubes
                 Vector3 edge2 = minCorner + edgeVertexOffsets[iVertex, 1] * fScale;
                 Vector3 middlePoint = (edge1+edge2)*0.5f;
 
-                // smoothed version would be: (requires continuous sample values, which fSample in this example doesn't provide)
+                // smoothed version would be:
                 /*float offset;
                 float s1 = fSample(edge1);
                 float delta = s1 - fSample(edge2);

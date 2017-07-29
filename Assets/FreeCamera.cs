@@ -17,6 +17,10 @@ public class FreeCamera : MonoBehaviour
             camtrans.position += camtrans.forward * Time.deltaTime * MoveSpeed;
         if (Input.GetKey(KeyCode.S))
             camtrans.position -= camtrans.forward * Time.deltaTime * MoveSpeed;
+        if (Input.GetKey(KeyCode.D))
+            camtrans.position += camtrans.right * Time.deltaTime * MoveSpeed;
+        if (Input.GetKey(KeyCode.A))
+            camtrans.position -= camtrans.right * Time.deltaTime * MoveSpeed;
 
         _rotX += Input.GetAxis("Mouse X");
         _rotY += Input.GetAxis("Mouse Y");

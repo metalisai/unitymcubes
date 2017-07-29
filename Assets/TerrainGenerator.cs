@@ -60,7 +60,7 @@ public class TerrainGenerator : MonoBehaviour
         var go = new GameObject("TerrainChunk");
         var mf = go.AddComponent<MeshFilter>();
         var mr = go.AddComponent<MeshRenderer>();
-        mf.mesh = mesh;
+        mf.sharedMesh = mesh;
         mr.sharedMaterial = sharedMaterial;
         return go;
     }
