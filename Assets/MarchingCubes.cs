@@ -5,7 +5,7 @@ using UnityEngine;
 // Marching cubes ported from C to C#
 // Original source: http://paulbourke.net/geometry/polygonise/marchingsource.cpp
 
-// NOTE: no uvs, no normals, no smoothing
+// NOTE: no uvs, no normals
 // triplanar mapping for uvs?
 // analytical normals would probably be optimal (Mesh.RecalculateNormals() is slow and inaccurate)
 
