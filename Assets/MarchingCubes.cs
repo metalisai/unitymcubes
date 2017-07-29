@@ -17,8 +17,11 @@ public class MarchingCubes
     // outside the function for better performance
     float[] afCubeValue = new float[8];
 
-    public delegate float sampleDelegate(Vector3 position);
-    public sampleDelegate sampleProc;
+    public delegate float SampleDelegate(Vector3 position);
+    public SampleDelegate sampleProc;
+
+    // set to true for smoother mesh
+    public bool interpolate = false;
 
     public MarchingCubes()
     {
@@ -103,16 +106,24 @@ public class MarchingCubes
                     IVec3 edge2I = edgeVertexOffsets[edgeIndex, 1];
                     Vector3 edge1 = edge1I * scale;
                     Vector3 edge2 = edge2I * scale;
-                    Vector3 middlePoint = (edge1+edge2)*0.5f;
 
-                    /*float ofst;
-                    float s1 = sampleBuffer[i + edge1I.x, j + edge1I.y, k + edge1I.z];
-                    float delta = s1 - sampleBuffer[i + edge2I.x, j + edge2I.y, k + edge2I.z];
-                    if(delta == 0.0f)
-                        ofst = 0.5f;
+                    Vector3 middlePoint;
+
+                    if(interpolate)
+                    {
+                        float ofst;
+                        float s1 = sampleBuffer[i + edge1I.x, j + edge1I.y, k + edge1I.z];
+                        float delta = s1 - sampleBuffer[i + edge2I.x, j + edge2I.y, k + edge2I.z];
+                        if(delta == 0.0f)
+                            ofst = 0.5f;
+                        else
+                            ofst = s1 / delta;
+                        middlePoint = edge1 + ofst*(edge2-edge1); // lerp
+                    }
                     else
-                        ofst = s1 / delta;
-                    Vector3 middlePoint = edge1 + ofst*(edge2-edge1); // lerp*/
+                    {
+                        middlePoint = (edge1+edge2)*0.5f;
+                    }
 
                     _vertices.Add(offset + middlePoint);
                     _indices.Add(_currentIndex++);
@@ -157,17 +168,25 @@ public class MarchingCubes
 
                 Vector3 edge1 = minCorner + edgeVertexOffsets[iVertex, 0] * fScale;
                 Vector3 edge2 = minCorner + edgeVertexOffsets[iVertex, 1] * fScale;
-                Vector3 middlePoint = (edge1+edge2)*0.5f;
+
+                Vector3 middlePoint;
+                if(interpolate)
+                {
+                    float offset;
+                    float s1 = sampleProc(edge1);
+                    float delta = s1 - sampleProc(edge2);
+                    if(delta == 0.0f)
+                        offset = 0.5f;
+                    else
+                        offset = s1 / delta;
+                    middlePoint = edge1 + offset*(edge2-edge1); // lerp
+                }
+                else
+                {
+                    middlePoint = (edge1+edge2)*0.5f;
+                }
 
                 // smoothed version would be:
-                /*float offset;
-                float s1 = sampleProc(edge1);
-                float delta = s1 - sampleProc(edge2);
-                if(delta == 0.0f)
-                    offset = 0.5f;
-                else
-                    offset = s1 / delta;
-                Vector3 middlePoint = edge1 + offset*(edge2-edge1); // lerp*/
 
                 _vertices.Add(middlePoint);
                 _indices.Add(_currentIndex++);

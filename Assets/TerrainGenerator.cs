@@ -32,6 +32,7 @@ public class TerrainGenerator : MonoBehaviour
 
         _mcubes = new MarchingCubes();
         _mcubes.sampleProc = fSample;
+        //_mcubes.interpolate = true;
 
         int chunkSize = 10;
         for (int i = 0; i < 10; i++)
