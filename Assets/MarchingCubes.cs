@@ -205,7 +205,7 @@ public class MarchingCubes
         { new IVec3(0, 1, 0), new IVec3(0, 1, 1) }
     };
 
-    int[,] a2iTriangleConnectionTable = new int[,]
+    static readonly int[,] a2iTriangleConnectionTable = new int[,]
     {
         {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
         {0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
