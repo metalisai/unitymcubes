@@ -17,6 +17,14 @@ public class MarchingCubes
     // outside the function for better performance
     float[] afCubeValue = new float[8];
 
+    public delegate float sampleDelegate(Vector3 position);
+    public sampleDelegate sampleProc;
+
+    public MarchingCubes()
+    {
+        sampleProc = (Vector3 p) => { return 0.0f; };
+    }
+
     public void Reset()
     {
         _vertices.Clear();
@@ -34,19 +42,6 @@ public class MarchingCubes
         return _indices.ToArray();
     }
 
-    float fSample(Vector3 position)
-    {
-        float pi = Mathf.PI;
-        float sampleSize = 0.1f;
-
-        float height01 = Mathf.PerlinNoise((position.x+pi)*sampleSize, (position.z+pi)*sampleSize);
-        float height = height01 * 8.0f;
-        float heightSample = height - position.y;
-
-        float volumetricSample = PerlinNoise.PerlinNoise3((position.x+pi)*sampleSize, (position.y+pi)*sampleSize, (position.z+pi)*sampleSize);
-        return Mathf.Min(heightSample, -volumetricSample) + Mathf.Clamp01(height01 - position.y + 0.5f);
-    }
-
     public void MarchChunk(Vector3 minCorner, int size, float scale)
     {
         int flagIndex;
@@ -61,7 +56,7 @@ public class MarchingCubes
         for(int k = 0; k < sizep1; k++)
         {
             Vector3 offset = new Vector3(i * scale, j * scale, k * scale);
-            sampleBuffer[i, j, k] = fSample(minCorner + offset);
+            sampleBuffer[i, j, k] = sampleProc(minCorner + offset);
         }
 
         // Now march!
@@ -126,7 +121,6 @@ public class MarchingCubes
         }
     }
 
-
     public void MarchCube(Vector3 minCorner, float fScale)
     {
         int iCorner, iVertex, iVertexTest, iTriangle, iFlagIndex;
@@ -135,7 +129,7 @@ public class MarchingCubes
         for (iVertex = 0; iVertex < 8; iVertex++)
         {
             Vector3 cornerPosition = minCorner + cornerOffsets[iVertex]*fScale;
-            afCubeValue[iVertex] = fSample(cornerPosition);
+            afCubeValue[iVertex] = sampleProc(cornerPosition);
         }
 
         //Find which vertices are inside of the surface and which are outside
@@ -167,8 +161,8 @@ public class MarchingCubes
 
                 // smoothed version would be:
                 /*float offset;
-                float s1 = fSample(edge1);
-                float delta = s1 - fSample(edge2);
+                float s1 = sampleProc(edge1);
+                float delta = s1 - sampleProc(edge2);
                 if(delta == 0.0f)
                     offset = 0.5f;
                 else

@@ -6,9 +6,22 @@ using UnityEngine;
 
 public class TerrainGenerator : MonoBehaviour
 {
-    MarchingCubes _mcubes = new MarchingCubes();
+    MarchingCubes _mcubes;
     const float voxelSize = 1.0f;
     Material sharedMaterial;
+
+    float fSample(Vector3 position)
+    {
+        float pi = Mathf.PI;
+        float sampleSize = 0.1f;
+
+        float height01 = Mathf.PerlinNoise((position.x+pi)*sampleSize, (position.z+pi)*sampleSize);
+        float height = height01 * 8.0f;
+        float heightSample = height - position.y;
+
+        float volumetricSample = PerlinNoise.PerlinNoise3((position.x+pi)*sampleSize, (position.y+pi)*sampleSize, (position.z+pi)*sampleSize);
+        return Mathf.Min(heightSample, -volumetricSample) + Mathf.Clamp01(height01 - position.y + 0.5f);
+    }
 
     void Start()
     {
@@ -16,6 +29,9 @@ public class TerrainGenerator : MonoBehaviour
         sw.Start();
 
         sharedMaterial = new Material(Shader.Find("Standard"));
+
+        _mcubes = new MarchingCubes();
+        _mcubes.sampleProc = fSample;
 
         int chunkSize = 10;
         for (int i = 0; i < 10; i++)
