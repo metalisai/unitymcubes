@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0, g: 0, b: 0, a: 1}
+  m_IndirectSpecularColor: {r: 0.44658846, g: 0.49642324, b: 0.5748258, a: 1}
 --- !u!157 &3
 LightmapSettings:
   m_ObjectHideFlags: 0
@@ -120,10 +120,10 @@ GameObject:
   - component: {fileID: 1771845332}
   - component: {fileID: 1771845331}
   - component: {fileID: 1771845330}
-  - component: {fileID: 1771845329}
   - component: {fileID: 1771845335}
   - component: {fileID: 1771845336}
   - component: {fileID: 1771845337}
+  - component: {fileID: 1771845329}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -139,9 +139,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 1771845328}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 439c08bf113cf3a43b3c2808de65986e, type: 3}
+  m_Script: {fileID: 11500000, guid: d1cc3aeed795841f5ad2f717b0ddf905, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  terrainMaterial: {fileID: 2100000, guid: 3aae9b06a6eb0462bbe3af7f9f1692cd, type: 2}
 --- !u!81 &1771845330
 AudioListener:
   m_ObjectHideFlags: 0
@@ -218,7 +219,7 @@ MonoBehaviour:
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 1771845328}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 730475ee64f9a894bbac0d9e6f22e813, type: 3}
   m_Name: 
