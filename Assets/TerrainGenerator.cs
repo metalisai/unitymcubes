@@ -34,7 +34,6 @@ public class TerrainGenerator
     public GameObject GenerateChunk(Vector3 origin, int size, float voxelSize, bool active = false)
     {
         _mcubes.Reset();
-        Debug.Log("gen " + voxelSize);
 
         _mcubes.MarchChunk(origin, size, voxelSize);
 
